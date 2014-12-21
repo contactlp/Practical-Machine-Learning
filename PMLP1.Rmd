@@ -1,0 +1,106 @@
+---
+title: "Practical Machine Learning Project"
+author: "John6Gates"
+---
+**Background:**
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+**Summary:**
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: 
+
+exactly according to the specification (Class A)
+throwing the elbows to the front (Class B)
+lifting the dumbbell only halfway (Class C)
+lowering the dumbbell only halfway (Class D)
+throwing the hips to the front (Class E)
+Read more: http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises#ixzz3AgifC0Uo 
+
+
+**Loading Training and Testing data**
+
+```{r,echo=TRUE,results='hide'}
+if (!file.exists("~/Data/PML/pml-training.csv")){
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+                "~/Data/PML/pml-training.csv")
+}
+if (!file.exists("~/Data/PML/pml-testing.csv")){
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
+                "~/Data/PML/pml-testing.csv")
+}
+Activity = read.csv("~/Data/PML/pml-training.csv", na.strings = c("NA", ""))
+Testing= read.csv("~/Data/PML/pml-testing.csv", na.strings = c("NA", ""))
+
+```
+
+**Data Cleaning**
+
+I will remove column which have very large number of NA. Here I used 3000 because it will not able to provide accurate data for missing values. Also remove first column since it is not predictive variable.     
+```{r,echo=TRUE}
+Activity <- Activity[,-1]
+Testing<- Testing[,-1]
+summary(Activity$classe)
+column_To_remove <- apply(!is.na(Activity), 2, sum)>3000
+Activity <- Activity[,column_To_remove]
+Testing <- Testing[,column_To_remove]
+```
+
+Converting variables which have few distinct values for better prediction.
+```{r,echo=TRUE}
+Activity$user_name <- factor(Activity$user_name)
+Activity$cvtd_timestamp <-  factor(Activity$cvtd_timestamp)
+Activity$new_window <- factor(Activity$new_window)
+Activity$classe <- factor(Activity$classe)
+
+Testing$user_name <- factor(Testing$user_name)
+Testing$cvtd_timestamp <-  factor(Testing$cvtd_timestamp)
+Testing$new_window <- factor(Testing$new_window)
+```
+
+now we will set seed number to 1000 and loading necessary library for analysis
+```{r,echo=TRUE,results='hide'}
+set.seed(1000)
+library("caret")
+library("randomForest")
+```
+
+**Creating Testing(cross validation set) and Traning data set from data set.**
+
+```{r,echo=TRUE}
+inTrain = createDataPartition(y=Activity$classe, p=0.75, list=FALSE)
+training = Activity[inTrain,]
+Cross_Validation = Activity[-inTrain,]
+str(training)
+```
+unnecessary variables are removed from training set.
+```{r,echo=TRUE}
+training = training[,-c(1:6)]
+```
+
+**Model fetting**
+
+Random Forest Method
+```{r,echo=TRUE, eval=FALSE}
+Random_Forest_Model <- train(classe ~., method="rf", data=training,  trControl=trainControl(method='cv'), allowParallel=TRUE  )
+saveRDS(Random_Forest_Model, "rfmodel.RDS")
+```
+
+```{r,echo=FALSE,eval=TRUE}
+Random_Forest_Model = readRDS("~/data/PML/rfmodel.RDS")
+training_Prediction <- predict(Random_Forest_Model, training)
+confusionMatrix(training_Prediction, training$classe)
+```
+*Out of sample error:* 
+Expected out sample error should be around 2 percent.
+
+```{r,echo=TRUE}
+Cross_Validation_Prediction<- predict(Random_Forest_Model, Cross_Validation)
+confusionMatrix(Cross_Validation_Prediction, Cross_Validation$classe)
+```
+*Final result for training data set*
+```{r,echo=TRUE}
+Testing_Prediction <-as.data.frame(predict(Random_Forest_Model, Testing))
+Testing_Prediction<- cbind(c(1:20), Testing_Prediction)
+colnames(Testing_Prediction)<-c("problem id", "Predicted classe through Random Forest")
+Testing_Prediction
+```
